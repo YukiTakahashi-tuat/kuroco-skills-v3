@@ -503,8 +503,9 @@ topics の項目ではなくファイルマネージャーのツリー（`files/
 { "storage": "cloud_public", "directory": "videos", "file": "files/temp/kuroco/<site>/<uuid>.mp4", "file_name": "intro.mp4" }
 ```
 
-- `file_name` が保存名と拡張子を決める。`directory` は `file_manager-list` が返す `path` と同じ相対パスで、途中のフォルダは自動作成される（フォルダ作成ツールは無い）
-- 同名ファイルは上書き。`allow_overwrite: false` で拒否させられる
+- `file_name` が保存名と拡張子を決める。拡張子はサイトのアップロード許可リストにあるもの（php 等の実行系は不可）で、内容と一致していること（HTML/SVG/JS の中身を画像拡張子で置くなど、偽装は拒否される）。フォルダごとの拡張子制限も適用される
+- `directory` は `file_manager-list` が返す `path` と同じ相対パスで、途中のフォルダは自動作成される（フォルダ作成ツールは無い）
+- 同名ファイルは上書き（ツールは destructive 扱い）。`allow_overwrite: false` で拒否させられる
 - クラウドストレージ（`cloud_public` / `cloud_private`）宛ての `file_id` はストレージ側でコピーされ、Kuroco のサーバーを経由しない。`files-create_temp_upload_url` に `storage: "S3"` を付けて発行した `file_id` ならサイズ上限なし
 - ローカルストレージ（`kurocofiles_*`）宛ての `file_id` は **80MB まで**。超える場合はクラウドストレージに置く
 - 応答の `path` は `file_manager-list` / `file_manager-delete` に渡す値、`content_field_value` は「ファイル（ファイルマネージャーから）」型の項目に書き込む値
