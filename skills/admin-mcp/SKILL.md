@@ -491,6 +491,24 @@ topics の拡張項目のキー名は**サイト設定によって2通りに分�
    値の形は文字列 `"files/temp/..."`、またはキャプション付きの
    `{"file_id": "files/temp/...", "desc": "キャプション"}`
 
+### ファイルマネージャーへのアップロード（`file_manager-upload`）
+
+topics の項目ではなくファイルマネージャーのツリー（`files/user/`・`files/ltd/`・クラウドストレージ）に置く場合は `file_manager-upload` を使う。
+
+```json
+// 16MB まで: data URI をそのまま渡す
+{ "storage": "kurocofiles_public", "directory": "docs/2026", "file": "data:application/pdf;base64,...", "file_name": "report.pdf" }
+
+// それ以上: files-create_temp_upload_url で PUT した file_id を渡す
+{ "storage": "cloud_public", "directory": "videos", "file": "files/temp/kuroco/<site>/<uuid>.mp4", "file_name": "intro.mp4" }
+```
+
+- `file_name` が保存名と拡張子を決める。`directory` は `file_manager-list` が返す `path` と同じ相対パスで、途中のフォルダは自動作成される（フォルダ作成ツールは無い）
+- 同名ファイルは上書き。`allow_overwrite: false` で拒否させられる
+- クラウドストレージ（`cloud_public` / `cloud_private`）宛ての `file_id` はストレージ側でコピーされ、Kuroco のサーバーを経由しない。`files-create_temp_upload_url` に `storage: "S3"` を付けて発行した `file_id` ならサイズ上限なし
+- ローカルストレージ（`kurocofiles_*`）宛ての `file_id` は **80MB まで**。超える場合はクラウドストレージに置く
+- 応答の `path` は `file_manager-list` / `file_manager-delete` に渡す値、`content_field_value` は「ファイル（ファイルマネージャーから）」型の項目に書き込む値
+
 > **承認ゲートとの順序**: 書き込み前のユーザー承認を得てから URL を発行し、
 > 「発行 → PUT → 消費」を一続きで行うこと（承認待ちの間に発行すると期限切れのリスク）。
 
