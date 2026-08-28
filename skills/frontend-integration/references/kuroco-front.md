@@ -178,7 +178,7 @@ GitHubリポジトリなしで、ビルド成果物のzipを直接デプロイ�
 2. **zip化**: ビルド出力ディレクトリの**中身**をzipのルートにする（`cd dist && zip -r ../dist.zip .`）
 3. **アップロード先の発行**: `files-create_temp_upload_url` を呼ぶ。`file_size`（バイト数）と `ext: "zip"` の宣言が必須。返却された `presigned_url` にzipの生バイトをPUTする
 4. **デプロイ実行**: `kuroco_front-deploy` を呼ぶ。`artifact_url` に手順3のレスポンスの `url`（または `short_url`）を渡す
-   - `artifact_url` は **Kuroco Filesストレージ上のURLのみ**受け付ける（第三者ホストのURLや `kuroco-file:` 参照は不可）
+   - `artifact_url` は **Kuroco Filesストレージ上のURLのみ**受け付ける（第三者ホストのURLは不可）
    - `domain` 省略時はサイト設定から自動解決（`site_url` → `site_url2` → `{site_key}.g.kuroco-front.app` の順）。指定する場合もこのいずれかに一致する必要がある
    - `is_preview: true` を渡すとステージ環境へのプレビューデプロイになり、レスポンスに `stage_url` が返る。**本番反映前にプレビューで確認するのを推奨**
    - `hash` は任意（7文字以上の英数字。省略時は自動生成）
