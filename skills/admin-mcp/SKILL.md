@@ -2,8 +2,8 @@
 name: kuroco-admin-mcp
 metadata:
   author: Diverta inc.
-  version: "1.7.2"
-  lastUpdated: "2026-08-27"
+  version: "1.7.5"
+  lastUpdated: "2026-08-28"
 description: Kuroco Admin MCP（管理MCPサーバー）の接続設定・認証・ツール利用を支援する。AIエージェントからKurocoの管理操作を行う際の推奨手段で、OAuth 2.0 / CIMD認証、スコープ（mcp:admin / mcp:tools.all / mcp:tools.write / mcp:tools.read）と作業ごとに必要なレベル、whoamiによる実効権限の確認、Claude Code・Claude Web・ChatGPT・Codex CLIからの接続設定、部分更新（patch.カラム名による行単位の書き換え、base_hashによる楽観ロック）をカバー。MCP経由の管理操作、Issuer URLやprotected resource metadataの設定、大きなCSS/JS/テンプレートの一部だけの更新、MCPツールが見えない・権限不足で書き込めない等のトラブルシュートに使用。
 ---
 
@@ -274,6 +274,14 @@ Admin MCP のヘッダー認証は `Authorization: Bearer`。コンテンツ API
 - **接続後は新しいタスクを開始して `whoami` を実行し**、接続先ホスト・実効スコープ・
   読み書き権限・サイト固有の上限を確認してから作業に入る（[whoami による事前確認](#whoami-による事前確認)）
 - 作業に必要な**最小スコープの URL** を選ぶ（[構築作業に必要なスコープ](#構築作業に必要なスコープ)）
+  - **担当者の責務で決める:**
+
+    | 担当者の責務 | スコープ |
+    |---|---|
+    | 構築担当 | `mcp:admin` |
+    | 改修担当 | 必要に応じて `mcp:admin` も許可 |
+    | 保守・運用担当 | 最小権限 |
+    | その他 | 最小権限 |
 
 ---
 
