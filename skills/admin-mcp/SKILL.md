@@ -2,7 +2,7 @@
 name: kuroco-admin-mcp
 metadata:
   author: Diverta inc.
-  version: "1.7.5"
+  version: "1.7.6"
   lastUpdated: "2026-08-28"
 description: Kuroco Admin MCP（管理MCPサーバー）の接続設定・認証・ツール利用を支援する。AIエージェントからKurocoの管理操作を行う際の推奨手段で、OAuth 2.0 / CIMD認証、スコープ（mcp:admin / mcp:tools.all / mcp:tools.write / mcp:tools.read）と作業ごとに必要なレベル、whoamiによる実効権限の確認、Claude Code・Claude Web・ChatGPT・Codex CLIからの接続設定、部分更新（patch.カラム名による行単位の書き換え、base_hashによる楽観ロック）をカバー。MCP経由の管理操作、Issuer URLやprotected resource metadataの設定、大きなCSS/JS/テンプレートの一部だけの更新、MCPツールが見えない・権限不足で書き込めない等のトラブルシュートに使用。
 ---
@@ -269,10 +269,15 @@ Admin MCP のヘッダー認証は `Authorization: Bearer`。コンテンツ API
   「エラーが出た」以外の理由で手動登録へ倒さない
 - **Kuroco は RFC 7591 の DCR を実装していない。** DCR しか持たないクライアント
   （Cursor 等）は手動クライアント登録が唯一の経路
-- **サイト全体に影響する設定変更はエージェントが確定しない。** 認可サーバーの設定変更や
-  CIMD の有効化が必要な場合は、必要性を説明してユーザー自身に操作してもらう
+- **サイト全体に影響する設定変更はエージェントが確定しない**が、操作を人間に丸投げもしない。
+  ブラウザ操作ツールが使えるなら、CIMD の有効化やクライアント側のコネクタ登録は**自分で実行し、
+  確定の直前に承認を得る**（認可サーバーの編集画面で有効化 → 保存 → 再表示して反映を確認。
+  グラントは `authorization_code` + `refresh_token`）。人間に渡すのは**ログインの認証情報入力**と、
+  ワークスペース公開のように影響範囲が広い確定操作だけ。
+  **本番サイトの管理画面ログインをクラウド側のブラウザに渡さない**
 - **接続後は新しいタスクを開始して `whoami` を実行し**、接続先ホスト・実効スコープ・
-  読み書き権限・サイト固有の上限を確認してから作業に入る（[whoami による事前確認](#whoami-による事前確認)）
+  読み書き権限・サイト固有の上限を確認してから作業に入る（[whoami による事前確認](#whoami-による事前確認)）。
+  **セッションを作り直すと文脈が失われるクライアントでは、構築を始める前に接続を終わらせる**
 - 作業に必要な**最小スコープの URL** を選ぶ（[構築作業に必要なスコープ](#構築作業に必要なスコープ)）
   - **担当者の責務で決める:**
 
@@ -559,6 +564,7 @@ topics の項目ではなくファイルマネージャーのツリー（`files/
 | `rcms_api-generate_token` が権限エラー | `rcms_api/update` が要るため `mcp:tools.all` 以上。`privileged_static` はさらに `mcp:admin` が必要 |
 | `files/temp/...` の `file_id` が解決できない | プリサインド URL の期限切れ（10 分）、PUT 前に消費した、または別サイトで発行した `file_id`。URL を再発行して PUT からやり直す |
 | 認可サーバーが情報ページに出ない | 管理者が削除した認可サーバーは自動再作成されない。手動で再作成する |
+| 認可画面に「このサイトに未登録のアプリケーション」と警告が出る | **CIMD では正常**（`client_id` がメタデータドキュメントの URL で、管理者が個別登録したクライアントではないため）。アプリ名ではなく**提供元ドメイン**で信頼性を判断して続行する |
 | OAuth のクライアント登録が通らない | 認可サーバーで CIMD（クライアント ID メタデータドキュメント）が有効か確認する。CIMD 非対応クライアントは手動クライアント登録が必要（Kuroco は DCR を実装していない）。クライアント別の対応は `../kuroco-docs/docs/reference-mcp-ai.md` の `mcp-client-configuration` を参照 |
 | Codex から接続できない | ① 認可サーバーで CIMD が有効か ② スコープ付き URL（`/x/...`）を指定しているか ③ `~/.codex/config.toml` の `[mcp_servers.<name>.oauth]` に `client_id` が残っていないか（設定済みの client_id が優先され CIMD が使われない）。CIMD を使わない場合は手動クライアント登録が必要（Kuroco は DCR を実装していない） |
 
