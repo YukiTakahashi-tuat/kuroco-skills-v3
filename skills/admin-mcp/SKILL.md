@@ -302,7 +302,8 @@ Admin MCP のヘッダー認証は `Authorization: Bearer`。コンテンツ API
 | 一括指定（別ツールではない） | `topics-update` / `topics-delete` の `ids` / `filter` / `set` / `rows` | 複数件は同じ update / delete ツールの引数で指定する。`dry_run` で件数を確認し `expected_cnt` でガード、200 件超は `async: true` |
 | `{mt}-get` | `topics-get` | 単一レコードの ID 指定取得 |
 | `{service}-{method}` | `email-send` | サービスモデル |
-| メタツール | `whoami`, `topics-describe`, `files-create_upload` | 実効権限の確認／topics のフィールド定義確認／ファイルアップロード |
+| メタツール | `whoami`, `topics-describe` | 実効権限の確認／topics のフィールド定義確認 |
+| ステージング | `files-create_temp_upload_url` | ファイルアップロード（一時ストレージへの presigned PUT。topics バンドルにも公開される） |
 
 **正確なツール名と入力スキーマは必ず `tools/list` で確認する（名前を推測して呼ばない）。**
 
@@ -484,28 +485,48 @@ topics の拡張項目のキー名は**サイト設定によって2通りに分�
 
 バイナリを直接 MCP に送らず、**ステージング → 参照渡し**の 2 段階方式:
 
-1. `files-create_upload` ツールを呼ぶと、`file_ref`（`kuroco-file:<token>` 参照）と
-   アップロード先 `upload`（S3 プリサインド PUT またはローカル
-   `PUT /direct/rcms_api/mcp_upload/<token>`）が発行される:
+1. `files-create_temp_upload_url` ツールを呼ぶと、`file_id` と S3 プリサインド PUT の
+   `presigned_url`（および `presigned_short_url`）が発行される。`file_size`（バイト数）と
+   `ext`（拡張子）の宣言が必須:
 
    ```json
-   // tool: files-create_upload（filename のみ必須）
-   { "filename": "product_sheet.pdf", "mime_type": "application/pdf" }
+   // tool: files-create_temp_upload_url
+   { "file_size": 1048576, "ext": "pdf" }
    ```
-2. 発行された URL にファイル本体（生バイト）を PUT する
-3. `topics-create` / `topics-update` のファイル/画像型フィールドの値として `file_ref` を渡して消費する。
-   値の形は文字列 `"kuroco-file:<token>"`、またはキャプション付きの
-   `{"file_id": "kuroco-file:<token>", "desc": "キャプション"}`
+2. 発行された URL にファイル本体（生バイト）を PUT する（`presigned_short_url` が 307 を返す場合は
+   GET で `Location` を解決してから、その URL に PUT する）
+3. `topics-create` / `topics-update` のファイル/画像型フィールドの値として `file_id` を渡して消費する。
+   値の形は文字列 `"files/temp/..."`、またはキャプション付きの
+   `{"file_id": "files/temp/...", "desc": "キャプション"}`
 
-> **承認ゲートとの順序**: 書き込み前のユーザー承認を得てから `file_ref` を発行し、
-> 「発行 → PUT → 消費」を一続きで行うこと（承認待ちの間に発行すると TTL 切れのリスク）。
+### ファイルマネージャーへのアップロード（`file_manager-upload`）
+
+topics の項目ではなくファイルマネージャーのツリー（`files/user/`・`files/ltd/`・クラウドストレージ）に置く場合は `file_manager-upload` を使う。
+
+```json
+// 16MB まで: data URI をそのまま渡す
+{ "storage": "kurocofiles_public", "directory": "docs/2026", "file": "data:application/pdf;base64,...", "file_name": "report.pdf" }
+
+// それ以上: files-create_temp_upload_url で PUT した file_id を渡す
+{ "storage": "cloud_public", "directory": "videos", "file": "files/temp/kuroco/<site>/<uuid>.mp4", "file_name": "intro.mp4" }
+```
+
+- `file_name` が保存名と拡張子を決める。拡張子はサイトのアップロード許可リストにあるもの（php 等の実行系は不可）で、内容と一致していること（HTML/SVG/JS の中身を画像拡張子で置くなど、偽装は拒否される）。フォルダごとの拡張子制限も適用される
+- `directory` は `file_manager-list` が返す `path` と同じ相対パスで、途中のフォルダは自動作成される（フォルダ作成ツールは無い）
+- 同名ファイルは上書き（ツールは destructive 扱い）。`allow_overwrite: false` で拒否させられる
+- クラウドストレージ（`cloud_public` / `cloud_private`）宛ての `file_id` はストレージ側でコピーされ、Kuroco のサーバーを経由しない。`files-create_temp_upload_url` に `storage: "S3"` を付けて発行した `file_id` ならサイズ上限なし
+- ローカルストレージ（`kurocofiles_*`）宛ての `file_id` は **80MB まで**。超える場合はクラウドストレージに置く
+- 応答の `path` は `file_manager-list` / `file_manager-delete` に渡す値、`content_field_value` は「ファイル（ファイルマネージャーから）」型の項目に書き込む値
+
+> **承認ゲートとの順序**: 書き込み前のユーザー承認を得てから URL を発行し、
+> 「発行 → PUT → 消費」を一続きで行うこと（承認待ちの間に発行すると期限切れのリスク）。
 
 **制約:**
 
-- 参照の有効期限は **15 分**（TTL 900 秒）。「発行 → アップロード → 消費」を 15 分以内に完了させる
-- サイズ上限 **100MB**
-- 参照は発行したメンバーに束縛される（他ユーザーのトークンでは解決不可）
-- 小さいファイルはインライン data URI でも受理される
+- プリサインド URL の有効期限は **10 分**。「発行 → アップロード → 消費」を 10 分以内に完了させる
+- サイズ上限は `file_size` の宣言値で検査され、消費時にも再検査される（既定 100MB）
+- `storage: "S3"` を付けるとサイトの S3 バケットの `files/temp/` に直接置かれる（GCS サイトでは不可）
+- 小さいファイル（16MB まで）はインライン data URI でも受理される
 
 ---
 
@@ -536,7 +557,7 @@ topics の拡張項目のキー名は**サイト設定によって2通りに分�
 | 書き込みは成功するが反映されない | `whoami` の `permissions.approval_required` に該当モジュールがないか確認。承認ワークフロー待ちの可能性 |
 | audience 不一致でトークン拒否 | エンドポイント URL の末尾スラッシュ・パス表記がトークン発行時と厳密一致しているか確認 |
 | `rcms_api-generate_token` が権限エラー | `rcms_api/update` が要るため `mcp:tools.all` 以上。`privileged_static` はさらに `mcp:admin` が必要 |
-| `kuroco-file:` 参照が解決できない | 15 分の TTL 切れ、または発行者と消費者のユーザー不一致。参照を再発行する |
+| `files/temp/...` の `file_id` が解決できない | プリサインド URL の期限切れ（10 分）、PUT 前に消費した、または別サイトで発行した `file_id`。URL を再発行して PUT からやり直す |
 | 認可サーバーが情報ページに出ない | 管理者が削除した認可サーバーは自動再作成されない。手動で再作成する |
 | OAuth のクライアント登録が通らない | 認可サーバーで CIMD（クライアント ID メタデータドキュメント）が有効か確認する。CIMD 非対応クライアントは手動クライアント登録が必要（Kuroco は DCR を実装していない）。クライアント別の対応は `../kuroco-docs/docs/reference-mcp-ai.md` の `mcp-client-configuration` を参照 |
 | Codex から接続できない | ① 認可サーバーで CIMD が有効か ② スコープ付き URL（`/x/...`）を指定しているか ③ `~/.codex/config.toml` の `[mcp_servers.<name>.oauth]` に `client_id` が残っていないか（設定済みの client_id が優先され CIMD が使われない）。CIMD を使わない場合は手動クライアント登録が必要（Kuroco は DCR を実装していない） |
